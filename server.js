@@ -2,13 +2,22 @@ const express = require("express");
 const mysql = require("mysql2/promise");
 
 const app = express();
-const cors = require("cors");
-app.use(cors());
-app.use(express.json());
-
 const PORT = process.env.PORT || 3000;
 
-// DB connection pool (uses environment variables – no hardcoded secrets)
+// CORS – allow all origins explicitly (handles preflight OPTIONS too)
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+  if (req.method === "OPTIONS") {
+    return res.sendStatus(200);
+  }
+  next();
+});
+
+app.use(express.json());
+
+// DB connection pool
 const pool = mysql.createPool({
   host: process.env.DB_HOST,
   user: process.env.DB_USER,
@@ -18,7 +27,7 @@ const pool = mysql.createPool({
   connectionLimit: 10,
 });
 
-// ✅ Health check endpoint – required by the ALB Target Group
+// Health check – required by ALB Target Group
 app.get("/health", (req, res) => {
   res.status(200).json({ status: "ok" });
 });
@@ -40,7 +49,6 @@ app.get("/api/messages", async (req, res) => {
 app.post("/api/messages", async (req, res) => {
   const { text } = req.body;
   if (!text) return res.status(400).json({ error: "text is required" });
-
   try {
     const [result] = await pool.query(
       "INSERT INTO messages (text) VALUES (?)",
